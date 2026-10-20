@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { mockFlags } from "./features/feature-flags/mockData";
 import type { Environment, FeatureFlag } from "./features/feature-flags/types";
 import "./App.css";
+import { FeatureFlagTable } from "./features/feature-flags/components/FeatureFlagTable";
 
 type StatusFilter = "all" | "enabled" | "disabled";
 
@@ -135,60 +136,11 @@ function App() {
               </select>
             </label>
           </div>
-
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Feature</th>
-                  <th scope="col">Key</th>
-                  <th scope="col">Owner</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFlags.map((flag) => {
-                  const isEnabled = flag.environments[environment];
-
-                  return (
-                    <tr key={flag.id}>
-                      <td>
-                        <strong>{flag.name}</strong>
-                        <small>{flag.description}</small>
-                      </td>
-                      <td>
-                        <code>{flag.key}</code>
-                      </td>
-                      <td>{flag.owner}</td>
-                      <td>
-                        <span
-                          className={`status ${isEnabled ? "enabled" : "disabled"}`}
-                        >
-                          {isEnabled ? "Enabled" : "Disabled"}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="action-button"
-                          type="button"
-                          aria-pressed={isEnabled}
-                          aria-label={`${isEnabled ? "Disable" : "Enable"} ${flag.name} in ${environment}`}
-                          onClick={() => toggleFlag(flag.id)}
-                        >
-                          {isEnabled ? "Disable" : "Enable"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {filteredFlags.length === 0 && (
-              <div className="empty-state">No flags match your filters.</div>
-            )}
-          </div>
+          <FeatureFlagTable
+            flags={filteredFlags}
+            environment={environment}
+            onToggle={toggleFlag}
+          />
         </section>
       </main>
     </div>
