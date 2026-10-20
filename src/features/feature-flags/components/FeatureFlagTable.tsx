@@ -4,12 +4,14 @@ interface FeatureFlagTableProps {
   flags: FeatureFlag[];
   environment: Environment;
   onToggle: (id: string) => void;
+  isToggling: boolean;
 }
 
 export function FeatureFlagTable({
   flags,
   environment,
   onToggle,
+  isToggling,
 }: FeatureFlagTableProps) {
   if (flags.length === 0) {
     return <div className="empty-state">No flags match your filters.</div>;
@@ -62,6 +64,7 @@ export function FeatureFlagTable({
                       isEnabled ? "Disable" : "Enable"
                     } ${flag.name} in ${environment}`}
                     onClick={() => onToggle(flag.id)}
+                    disabled={isToggling}
                   >
                     {isEnabled ? "Disable" : "Enable"}
                   </button>

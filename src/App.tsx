@@ -1,16 +1,50 @@
 import { useMemo, useState } from "react";
-import { mockFlags } from "./features/feature-flags/mockData";
-import type { Environment, FeatureFlag } from "./features/feature-flags/types";
+import type { Environment } from "./features/feature-flags/types";
 import "./App.css";
 import { FeatureFlagTable } from "./features/feature-flags/components/FeatureFlagTable";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getFeatureFlags,
+  updateFeatureFlagEnvironment,
+} from "./features/feature-flags/api";
 
 type StatusFilter = "all" | "enabled" | "disabled";
 
+const featureFlagsQueryKey = ["feature-flags"] as const;
+
+interface ToggleFlagVariables {
+  id: string;
+  environment: Environment;
+  enabled: boolean;
+}
+
 function App() {
-  const [flags, setFlags] = useState<FeatureFlag[]>(mockFlags);
+  const queryClient = useQueryClient();
+
   const [environment, setEnvironment] = useState<Environment>("production");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+
+  const {
+    data: flags = [],
+    isPending,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: featureFlagsQueryKey,
+    queryFn: getFeatureFlags,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, environment, enabled }: ToggleFlagVariables) =>
+      updateFeatureFlagEnvironment(id, environment, enabled),
+
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: featureFlagsQueryKey,
+      }),
+  });
 
   const enabledCount = flags.filter(
     (flag) => flag.environments[environment],
@@ -39,19 +73,16 @@ function App() {
   }, [flags, environment, search, status]);
 
   function toggleFlag(id: string) {
-    setFlags((current) =>
-      current.map((flag) =>
-        flag.id === id
-          ? {
-              ...flag,
-              environments: {
-                ...flag.environments,
-                [environment]: !flag.environments[environment],
-              },
-            }
-          : flag,
-      ),
-    );
+    const flag = flags.find((item) => item.id === id);
+    if (!flag || toggleMutation.isPending) {
+      return;
+    }
+
+    toggleMutation.mutate({
+      id,
+      environment,
+      enabled: !flag.environments[environment],
+    });
   }
 
   return (
@@ -81,67 +112,98 @@ function App() {
           <p>Manage feature availability across your environments.</p>
         </header>
 
-        <section className="stats" aria-label="Flag statistics">
-          <div className="stat-card">
-            <span>Total Flags</span>
-            <strong>{flags.length}</strong>
+        {isPending ? (
+          <p className="state-message" role="status">
+            Loading feature flags...
+          </p>
+        ) : isError ? (
+          <div className="state-message" role="alert">
+            <p>
+              Could not load feature flags:{" "}
+              {error instanceof Error ? error.message : "Unknown error"}
+            </p>
+            <button
+              className="action-button"
+              type="button"
+              onClick={() => void refetch()}
+            >
+              Retry
+            </button>
           </div>
-          <div className="stat-card">
-            <span>Enabled in {environment}</span>
-            <strong>{enabledCount}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Disabled in {environment}</span>
-            <strong>{flags.length - enabledCount}</strong>
-          </div>
-        </section>
+        ) : (
+          <>
+            <section className="stats" aria-label="Flag statistics">
+              <div className="stat-card">
+                <span>Total Flags</span>
+                <strong>{flags.length}</strong>
+              </div>
+              <div className="stat-card">
+                <span>Enabled in {environment}</span>
+                <strong>{enabledCount}</strong>
+              </div>
+              <div className="stat-card">
+                <span>Disabled in {environment}</span>
+                <strong>{flags.length - enabledCount}</strong>
+              </div>
+            </section>
 
-        <section className="panel" aria-label="Feature flag management">
-          <div className="toolbar">
-            <label>
-              Search
-              <input
-                type="search"
-                placeholder="Search feature flags..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+            <section className="panel" aria-label="Feature flag management">
+              <div className="toolbar">
+                <label>
+                  Search
+                  <input
+                    type="search"
+                    placeholder="Search feature flags..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </label>
+
+                <label>
+                  Environment
+                  <select
+                    value={environment}
+                    onChange={(event) =>
+                      setEnvironment(event.target.value as Environment)
+                    }
+                  >
+                    <option value="development">Development</option>
+                    <option value="staging">Staging</option>
+                    <option value="production">Production</option>
+                  </select>
+                </label>
+
+                <label>
+                  Status
+                  <select
+                    value={status}
+                    onChange={(event) =>
+                      setStatus(event.target.value as StatusFilter)
+                    }
+                  >
+                    <option value="all">All flags</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </label>
+              </div>
+              <FeatureFlagTable
+                flags={filteredFlags}
+                environment={environment}
+                onToggle={toggleFlag}
+                isToggling={toggleMutation.isPending}
               />
-            </label>
-
-            <label>
-              Environment
-              <select
-                value={environment}
-                onChange={(event) =>
-                  setEnvironment(event.target.value as Environment)
-                }
-              >
-                <option value="development">Development</option>
-                <option value="staging">Staging</option>
-                <option value="production">Production</option>
-              </select>
-            </label>
-
-            <label>
-              Status
-              <select
-                value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as StatusFilter)
-                }
-              >
-                <option value="all">All flags</option>
-                <option value="enabled">Enabled</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </label>
-          </div>
-          <FeatureFlagTable
-            flags={filteredFlags}
-            environment={environment}
-            onToggle={toggleFlag}
-          />
-        </section>
+              {toggleMutation.isError && (
+                <p className="error-message" role="alert">
+                  Could not update the flag:{" "}
+                  {toggleMutation.error instanceof Error
+                    ? toggleMutation.error.message
+                    : "Please try again."}
+                </p>
+              )}
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

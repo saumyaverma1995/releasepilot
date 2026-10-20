@@ -255,3 +255,13 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.state-message,
+.error-message {
+  padding: 20px;
+  color: #64748b;
+}
+
+.error-message {
+  color: #b91c1c;
+}
